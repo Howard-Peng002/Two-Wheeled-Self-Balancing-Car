@@ -173,7 +173,6 @@ adb install -r app-debug.apk
 │       └── WaveView.kt           # 实时波形控件
 ├── 电路原理图.png                 # 焊接接线参考
 ├── 蓝牙调参.apk                   # App 安装包
-├── _android_toolchain/           # App 编译用的 SDK / JDK，不要删
 └── README.md
 ```
 
