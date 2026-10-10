@@ -1,6 +1,8 @@
 # 平衡小车 (STM32F103 自平衡小车)
 
-基于 STM32F103 的自平衡小车。MPU6050 负责姿态解算，控制环跑在 MPU 的 INT 外部中断里（100Hz），用直立环 + 速度环 + 转向环的串级 PID 保持直立；支持手机蓝牙遥控与在线调参，并带超声波避障和自主行驶。
+本项目提供两套基于 STM32 标准外设库的固件实现：
+- 标准库：裸机版。 MPU6050 的 INT 外部中断以约 100 Hz 触发，并在中断中完成姿态读取、直立环＋速度环＋转向环计算和电机输出；主循环处理蓝牙遥控、在线调参、超声波避障及显示。
+- RTOS：FreeRTOS 版。 MPU 中断只通知高优先级平衡任务，由任务执行上述控制计算；蓝牙、超声波导航和 OLED 显示分别由其他任务处理。它沿用相同的硬件接线、默认参数和 App 协议。详细见RTOS目录中readme.md文件。
 
 ## 功能特性
 
@@ -26,8 +28,6 @@
 | 电机 | 直流减速电机 + 霍尔编码器 | 2 | 编码器接 TIM2 / TIM4 |
 | 电机驱动 | 双路 H 桥模块 | 1 | 每路需要 1 个 PWM + 2 个方向脚 |
 | 下载器 | ST-Link | 1 | 工程已按 ST-Link 配置 |
-
-> 电机驱动和电池的具体型号图片里没有，上面按接口需求描述。你若知道具体型号，可以直接替换这一行。
 
 ## 接线说明
 
@@ -59,30 +59,13 @@
 
 - **开发环境**：Keil MDK 5，编译器 ARMCC V5.06 update 5（AC5）
 - **工程文件**：`标准库/USER/UpStanding_Car.uvprojx`
-- **依赖库**：STM32F10x 标准外设库（StdPeriph），已随工程附带
+- **依赖库**：STM32F10x 标准外设库
 - **下载器**：ST-Link
-- **源文件编码**：UTF-8 with BOM。**不要存成 GBK**，Keil 里的中文注释会全变乱码
+- **源文件编码**：UTF-8 with BOM。
 - **手机 App**：Kotlin，AGP 8.1.4 / Gradle 8.5 / JDK 17，compileSdk 34 / minSdk 24
 
 ## 快速开始
-
-### 1. 编译固件
-
-Keil 打开 `标准库/USER/UpStanding_Car.uvprojx`，按 F7 编译。
-
-命令行方式（`D:\Keil5` 换成安装路径）：
-
-```bash
-"D:\Keil5\UV4\UV4.exe" -b "标准库\USER\UpStanding_Car.uvprojx" -j0 -o build.log
-```
-
-产物在 `标准库/OBJ/UpStanding_Car.hex`。
-
-### 2. 烧录
-
-用 ST-Link 把 `标准库/OBJ/UpStanding_Car.hex` 下载到主控。
-
-### 3. 安装手机 App
+### 1. 安装手机 App
 
 App 工程在 `蓝牙调参App/`，用 Android Studio 打开直接编译安装即可。
 
@@ -140,8 +123,8 @@ adb install -r app-debug.apk
 | `show` | 回读全部参数，返回一行 `#vk=... vd=... ...` |
 | `ping` | 连通性测试，返回 `#pong` |
 | `rst` | 清除速度环积分量 |
-| `mode=manual` | 切手动模式（蓝牙遥控） |
-| `mode=auto` | 切自动模式（超声波自主行驶） |
+| `mode=manual` | 切手动模式 |
+| `mode=auto` | 切自动模式 |
 | `mode=off` | 关闭运动控制 |
 | `mode?` | 查询当前模式与状态 |
 | `auto=start` / `auto=stop` | 自动模式下起停 |
@@ -164,15 +147,24 @@ adb install -r app-debug.apk
 │   │   ├── PWM/                  # TIM1 PWM 输出
 │   │   ├── SENSOR/               # 超声波测距
 │   │   └── USART3/               # 蓝牙串口与协议收包
-│   ├── STM32F10x_FWLib/          # 标准外设库（勿改）
-│   ├── CORE/  SYSTEM/            # 启动文件与系统层（勿改）
+│   ├── STM32F10x_FWLib/          # 标准外设库
+│   ├── CORE/  SYSTEM/            # 启动文件与系统层
 │   └── OBJ/                      # 编译产物，只烧 UpStanding_Car.hex
+├── RTOS/
+│    ├── USER/                 # RTOS 主程序、配置和独立 Keil 工程
+│    ├── HARDWARE/             # 硬件驱动副本；control.c 改为任务控制步
+│    ├── SYSTEM/               # 系统驱动副本；delay.c 改用 DWT
+│    ├── CORE/                 # STM32 启动文件
+│    ├── STM32F10x_FWLib/      # 标准外设库
+│    ├── FreeRTOS/             # FreeRTOS V11.3.0 源码和 MIT 许可证
+│    └── OBJ/                  # 此工程独立构建输出
 ├── 蓝牙调参App/                   # Android 遥控 + 调参 App（Kotlin）
 │   └── app/src/main/java/com/asus/balancecar/
 │       ├── MainActivity.kt       # 蓝牙连接、命令收发的全部逻辑
 │       └── WaveView.kt           # 实时波形控件
 ├── 电路原理图.png                 # 焊接接线参考
 ├── 蓝牙调参.apk                   # App 安装包
+├── _android_toolchain/           # App 编译用的 SDK / JDK
 └── README.md
 ```
 
